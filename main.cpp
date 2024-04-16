@@ -7,70 +7,16 @@
 #include <new>
 #include <thread>
 #include <cassert>
+#include "FixedCapacityQueue.hpp"
 #include "SPSCQueue.hpp"
 
 using namespace std;
 
-class FixedCapacityQueue
-{
- public:
-  FixedCapacityQueue (size_t capacity)
-      : _data(capacity), _cap(capacity)
-  {}
-
-  // returns 1 on success, 0 on failure
-  bool push(int value);
-
-  bool pop(int &value);
-
-  bool lock_and_push(int value);
-
-  bool lock_and_pop(int &value);
-
-  int64_t size() const noexcept { return _size; }
-
- // private:
-  std::vector<int> _data;
-  int64_t _head{0}, _size{0}, _cap{0};
-  std::mutex _m;
-};
-
-bool FixedCapacityQueue::push(int value)
-{
-  if (_size == _cap) return false;  //
-
-  _data[(_head +_size)%_cap] = value;
-  _size++;
-
-  return true;
-}
-
-bool FixedCapacityQueue::lock_and_push(int value)
-{
-  std::unique_lock<std::mutex> lock(_m);
-  return push(value);
-}
-
-bool FixedCapacityQueue::lock_and_pop(int &value)
-{
-  std::unique_lock<std::mutex> lock(_m);
-  return pop(value);
-}
-
-bool FixedCapacityQueue::pop(int & value)
-{
-  if (_size == 0) return false;
-
-  value = _data[_head % _cap];
-  _head++;
-  _size--;
-  return true;
-}
 
 void test_serial()
 {
   int n = 5;
-  FixedCapacityQueue q(n);
+  algorithms::FixedCapacityQueue q(n);
   for (int i = 0; i < n; i++) {
     auto success = q.push(i);
     if (!success) throw 3;
@@ -96,7 +42,7 @@ void test_serial()
 
 int test_parallel_mutex()
 {
-  FixedCapacityQueue q(100);
+  algorithms::FixedCapacityQueue q(100);
   int chunk = 50;
   int nthreads = 8;
 
@@ -143,6 +89,7 @@ int test_spsc()
 {
   algorithms::SPSCQueue queue(4);
   if (queue.size() != 0) throw 3;
+
   queue.enqueue(1);
   queue.enqueue(2);
   queue.enqueue(3);
@@ -154,7 +101,7 @@ int test_spsc()
     assert(store == static_cast<int>(d));
     assert(queue.size() == 4 - d);
   }
-  // assert(queue.size() == 0);
+  assert(queue.size() == 0);
   if (queue.size() != 0) throw 3;
 
   queue.enqueue(1);
@@ -191,9 +138,10 @@ int test_spsc()
   t1.join();
   t2.join();
 
-  // assert(queue.dequeue(store));
+  // std::cout << "size = " << queue.size() << std::endl;
+  assert(!queue.dequeue(store));
 
-  // assert(queue.push_back(5.0));
+  assert(queue.enqueue(5));
   return 0;
 }
 
